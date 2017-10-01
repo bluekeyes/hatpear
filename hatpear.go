@@ -3,7 +3,9 @@ package hatpear
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
+	"runtime"
 )
 
 type contextKey int
@@ -69,4 +71,45 @@ func Try(h Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		Store(r, h.ServeHTTP(w, r))
 	})
+}
+
+var (
+	// RecoverStackSize is the max size of a stack for a recovered panic.
+	RecoverStackSize = 4096
+)
+
+// Recover creates middleware that can recover from a panic in a handler,
+// storing a *PanicError for future handling.
+func Recover() Middleware {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			defer func() {
+				if v := recover(); v != nil {
+					stack := make([]byte, RecoverStackSize)
+					length := runtime.Stack(stack, false)
+
+					Store(r, &PanicError{
+						Value: v,
+						Stack: stack[:length],
+					})
+				}
+			}()
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// PanicError is an Error created from a recovered panic.
+type PanicError struct {
+	// Value is the value with which panic() was called
+	Value interface{}
+	// Stack is the stack trace of the panicing goroutine.
+	Stack []byte
+}
+
+func (e *PanicError) Error() string {
+	if err, ok := e.Value.(error); ok {
+		return err.Error()
+	}
+	return fmt.Sprintf("%v", e.Value)
 }
