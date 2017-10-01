@@ -2,7 +2,6 @@ package hatpear
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"runtime"
@@ -15,7 +14,7 @@ const (
 )
 
 // Store stores an error into the request's context. It panics if the request
-// was not configured by the middleware to store errors.
+// was not configured to store errors.
 func Store(r *http.Request, err error) {
 	errptr, ok := r.Context().Value(errorKey).(*error)
 	if !ok {
@@ -24,11 +23,12 @@ func Store(r *http.Request, err error) {
 	*errptr = err
 }
 
-// Get retrieves an error from the request's context.
+// Get retrieves an error from the request's context. It returns nil if the
+// request was not configured to store errors.
 func Get(r *http.Request) error {
 	errptr, ok := r.Context().Value(errorKey).(*error)
 	if !ok {
-		return errors.New("hatpear: request not configured to store errors")
+		return nil
 	}
 	return *errptr
 }
