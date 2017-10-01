@@ -1,4 +1,4 @@
-# hatpear
+# hatpear [![GoDoc](https://godoc.org/github.com/bluekeyes/hatpear?status.svg)](http://godoc.org/github.com/bluekeyes/hatpear)
 
 hatpear (from "httperr") is a simple, unopinionated Go 1.7+ library for
 capturing and responding to errors that occur while handling HTTP requests. It
