@@ -1,3 +1,10 @@
+// Package hatpear provides a way to aggregate errors from HTTP handlers so
+// they can be processed by middleware. Errors are stored in the context of the
+// current request either manually, when using standard library handler types,
+// or automatically, when using this package's handler types.
+//
+// Using the middleware returned by the Catch function is required for this
+// package to work; usage of all other functions and types is optional.
 package hatpear
 
 import (
@@ -38,7 +45,8 @@ type Middleware func(http.Handler) http.Handler
 
 // Catch creates middleware that processes errors stored while serving a
 // request. Errors are passed to the callback, which should write them to the
-// response in an appropriate format.
+// response in an appropriate format. This is usually the outermost middleware
+// in a chain.
 func Catch(h func(w http.ResponseWriter, r *http.Request, err error)) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
