@@ -10,6 +10,7 @@ package hatpear
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"runtime"
 )
@@ -82,23 +83,20 @@ func Try(h Handler) http.Handler {
 }
 
 var (
-	// RecoverStackSize is the max size of a stack for a recovered panic.
-	RecoverStackSize = 4096
+	// RecoverStackDepth is the max depth of stack trace to recover on panic.
+	RecoverStackDepth = 32
 )
 
 // Recover creates middleware that can recover from a panic in a handler,
-// storing a *PanicError for future handling.
+// storing a PanicError for future handling.
 func Recover() Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			defer func() {
 				if v := recover(); v != nil {
-					stack := make([]byte, RecoverStackSize)
-					length := runtime.Stack(stack, false)
-
-					Store(r, &PanicError{
-						Value: v,
-						Stack: stack[:length],
+					Store(r, PanicError{
+						value: v,
+						stack: stack(1),
 					})
 				}
 			}()
@@ -107,17 +105,67 @@ func Recover() Middleware {
 	}
 }
 
-// PanicError is an Error created from a recovered panic.
-type PanicError struct {
-	// Value is the value with which panic() was called
-	Value interface{}
-	// Stack is the stack trace of the panicing goroutine.
-	Stack []byte
+func stack(skip int) []runtime.Frame {
+	rpc := make([]uintptr, RecoverStackDepth)
+
+	n := runtime.Callers(skip+2, rpc)
+	frames := runtime.CallersFrames(rpc[0:n])
+
+	var stack []runtime.Frame
+	for {
+		f, more := frames.Next()
+		if !more {
+			break
+		}
+		stack = append(stack, f)
+	}
+	return stack
 }
 
-func (e *PanicError) Error() string {
-	if err, ok := e.Value.(error); ok {
-		return err.Error()
+// PanicError is an Error created from a recovered panic.
+type PanicError struct {
+	value interface{}
+	stack []runtime.Frame
+}
+
+// Value returns the exact value with which panic() was called.
+func (e PanicError) Value() interface{} {
+	return e.value
+}
+
+// StackTrace returns the stack of the panicking goroutine.
+func (e PanicError) StackTrace() []runtime.Frame {
+	return e.stack
+}
+
+// Format formats the error optionally including the stack trace.
+//
+//   %s		the error message
+//   %v     the error message and the source file and line number for each stack frame
+//
+// Format accepts the following flags:
+//
+//   %+v	the error message, and the function, file, and line for each stack frame
+func (e PanicError) Format(s fmt.State, verb rune) {
+	switch verb {
+	case 's':
+		io.WriteString(s, e.Error())
+	case 'v':
+		io.WriteString(s, e.Error())
+		for _, f := range e.stack {
+			io.WriteString(s, "\n")
+			if s.Flag('+') {
+				fmt.Fprintf(s, "%s\n\t", f.Function)
+			}
+			fmt.Fprintf(s, "%s:%d", f.File, f.Line)
+		}
 	}
-	return fmt.Sprintf("%v", e.Value)
+}
+
+func (e PanicError) Error() string {
+	v := e.value
+	if err, ok := v.(error); ok {
+		v = err.Error()
+	}
+	return fmt.Sprintf("panic: %v", v)
 }
