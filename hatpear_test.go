@@ -1,10 +1,11 @@
 package hatpear_test
 
 import (
-	"bytes"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/bluekeyes/hatpear"
@@ -88,21 +89,27 @@ func TestRecover(t *testing.T) {
 	w := httptest.NewRecorder()
 	catch(rec(h)).ServeHTTP(w, r)
 
-	if perr, ok := handledErr.(*hatpear.PanicError); ok {
-		v := perr.Value
+	if perr, ok := handledErr.(hatpear.PanicError); ok {
+		if !strings.HasPrefix(perr.Error(), "panic:") {
+			t.Errorf("Error string does not start with \"panic:\": %s", perr.Error())
+		}
+
+		v := perr.Value()
 		if v != "test panic" {
 			t.Errorf("Panic value (%v [%T]) does not equal expected value (test panic [string])", v, v)
 		}
 
-		if len(perr.Stack) == 0 {
+		if len(perr.StackTrace()) == 0 {
 			t.Error("The stack trace associated with the panic error is empty")
 		}
 
-		hstack := "hatpear_test.TestRecover.func2"
-		if !bytes.Contains(perr.Stack, []byte(hstack)) {
-			t.Errorf("The stack trace does not contain the handler function (%s):\n%s", hstack, string(perr.Stack))
+		hfunc := "hatpear_test.TestRecover.func2"
+		trace := fmt.Sprintf("%+v", perr)
+
+		if !strings.Contains(trace, hfunc) {
+			t.Errorf("The stack trace does not contain the handler function (%s):\n%s", hfunc, trace)
 		}
 	} else {
-		t.Errorf("Handled error with type %T was not a *hatpear.PanicError", handledErr)
+		t.Errorf("Handled error with type \"%T\" was not a hatpear.PanicError", handledErr)
 	}
 }
