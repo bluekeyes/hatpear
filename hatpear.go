@@ -28,7 +28,10 @@ func Store(r *http.Request, err error) {
 	if !ok {
 		panic("hatpear: request not configured to store errors")
 	}
-	*errptr = err
+	// check err after checking context to fail fast if unconfigured
+	if err != nil {
+		*errptr = err
+	}
 }
 
 // Get retrieves an error from the request's context. It returns nil if the
@@ -78,7 +81,8 @@ func (f HandlerFunc) ServeHTTP(w http.ResponseWriter, r *http.Request) error {
 // request's context.
 func Try(h Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		Store(r, h.ServeHTTP(w, r))
+		err := h.ServeHTTP(w, r)
+		Store(r, err)
 	})
 }
 

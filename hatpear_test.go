@@ -14,8 +14,13 @@ import (
 func TestStoreGet(t *testing.T) {
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		err := errors.New("test error")
-		hatpear.Store(r, err)
 
+		hatpear.Store(r, err)
+		if stored := hatpear.Get(r); stored != err {
+			t.Errorf("Stored error (%v) does not equal expected error (%v)", stored, err)
+		}
+
+		hatpear.Store(r, nil)
 		if stored := hatpear.Get(r); stored != err {
 			t.Errorf("Stored error (%v) does not equal expected error (%v)", stored, err)
 		}
