@@ -118,3 +118,35 @@ func TestRecover(t *testing.T) {
 		t.Errorf("Handled error with type \"%T\" was not a hatpear.PanicError", handledErr)
 	}
 }
+
+func TestRecoverAbortHandler(t *testing.T) {
+	var handledErr error
+
+	rec := hatpear.Recover()
+	catch := hatpear.Catch(func(w http.ResponseWriter, r *http.Request, err error) {
+		handledErr = err
+	})
+
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		panic(http.ErrAbortHandler)
+	})
+
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	w := httptest.NewRecorder()
+
+	panicChan := make(chan interface{})
+	go func() {
+		defer func() {
+			panicChan <- recover()
+		}()
+		catch(rec(h)).ServeHTTP(w, r)
+	}()
+
+	panicValue := <-panicChan
+	if panicValue != http.ErrAbortHandler {
+		t.Errorf("Expected handler to panic with http.ErrAbortHandler, but got: %v", panicValue)
+	}
+	if handledErr != nil {
+		t.Errorf("Expected no caught error, but got: %v", handledErr)
+	}
+}
